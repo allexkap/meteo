@@ -1,8 +1,14 @@
+#define BME280_ADDR 0x76
+#define MHZ19B_RX 4
+#define MHZ19B_TX 5
+
 #define PERIOD 5  // seconds
 
+#include <Adafruit_BME280.h>
 #include <SoftwareSerial.h>
 
-SoftwareSerial mhz19b(4, 5);  // RX, TX
+Adafruit_BME280 bme280;
+SoftwareSerial mhz19b(MHZ19B_RX, MHZ19B_TX);
 
 const byte set5000ppm[9] = {0xff, 0x01, 0x99, 0x00, 0x00, 0x00, 0x13, 0x88, 0xcb};
 const byte set2000ppm[9] = {0xff, 0x01, 0x99, 0x00, 0x00, 0x00, 0x07, 0xd0, 0x8f};
@@ -21,25 +27,39 @@ void setup() {
   mhz19b.begin(9600);
   delay(1000);
 
+  if (!bme280.begin(BME280_ADDR)) {
+    Serial.println("BME280 Error");
+    panic();
+  }
+
   byte response[9];
-  if (touch_mhz19b(response, set5000ppm)) panic();
+  if (touch_mhz19b(response, set5000ppm)) {
+    Serial.println("MH-Z19B Error");
+    panic();
+  }
 }
 
 void loop() {
-  byte response[9];
-  if (touch_mhz19b(response, measureCO2)) {
-    Serial.println("error");
-    return;
-  }
+  float temperature, humidity, pressure, co2_ppm;
 
-  int ppm = response[2] * 256 + response[3];
-  Serial.println(ppm);
+  temperature = bme280.readTemperature();
+  humidity = bme280.readHumidity();
+  pressure = bme280.readPressure();
+
+  byte response[9];
+  if (!touch_mhz19b(response, measureCO2))
+    co2_ppm = response[2] * 256 + response[3];
+  else
+    co2_ppm = NAN;
+
+  Serial.println(String(temperature) + ' ' + String(humidity) + ' ' +
+                 String(pressure) + ' ' + String(co2_ppm));
 
   delay(PERIOD * 1000);
 }
 
 void panic() {
-  while (1) {
+  for (;;) {
     PORTB ^= 1 << 5;
     delay(500);
   }
