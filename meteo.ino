@@ -1,6 +1,6 @@
 #define BME280_ADDR 0x76
-#define MHZ19B_RX 4
-#define MHZ19B_TX 5
+#define MHZ19B_RX 13
+#define MHZ19B_TX 15
 
 #define PERIOD 5  // seconds
 
@@ -29,13 +29,13 @@ void setup() {
 
   if (!bme280.begin(BME280_ADDR)) {
     Serial.println("BME280 Error");
-    panic();
+    panic_blink();
   }
 
   byte response[9];
   if (touch_mhz19b(response, set5000ppm)) {
     Serial.println("MH-Z19B Error");
-    panic();
+    panic_blink();
   }
 }
 
@@ -58,9 +58,10 @@ void loop() {
   delay(PERIOD * 1000);
 }
 
-void panic() {
+void panic_blink() {
+  pinMode(LED_BUILTIN, OUTPUT);
   for (;;) {
-    PORTB ^= 1 << 5;
+    digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
     delay(500);
   }
 }
