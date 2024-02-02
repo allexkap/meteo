@@ -2,13 +2,15 @@
 #define MHZ19B_RX 13
 #define MHZ19B_TX 15
 
-#define PERIOD 5  // seconds
-
 #include <Adafruit_BME280.h>
+#include <ESP8266WiFi.h>
 #include <SoftwareSerial.h>
+
+#include "keys.h"
 
 Adafruit_BME280 bme280;
 SoftwareSerial mhz19b(MHZ19B_RX, MHZ19B_TX);
+WiFiServer server(80);
 
 const byte set5000ppm[9] = {0xff, 0x01, 0x99, 0x00, 0x00, 0x00, 0x13, 0x88, 0xcb};
 const byte set2000ppm[9] = {0xff, 0x01, 0x99, 0x00, 0x00, 0x00, 0x07, 0xd0, 0x8f};
@@ -37,25 +39,54 @@ void setup() {
     Serial.println("MH-Z19B Error");
     panic_blink();
   }
+
+  WiFi.begin(WIFI_SSID, WIFI_PSWD);
+  Serial.println("Connecting to " WIFI_SSID);
+  for (int i = 0; WiFi.status() != WL_CONNECTED; ++i) {
+    Serial.print('.');
+    delay(1000);
+  }
+  Serial.print("\nIP address: ");
+  Serial.println(WiFi.localIP());
+
+  server.begin();
 }
 
 void loop() {
-  float temperature, humidity, pressure, co2_ppm;
+  WiFiClient client = server.available();
+  if (!client) return;
 
-  temperature = bme280.readTemperature();
-  humidity = bme280.readHumidity();
-  pressure = bme280.readPressure();
+  Serial.print("Client connected ");
+  Serial.print(client.remoteIP());
+  Serial.print(':');
+  Serial.println(client.remotePort());
+
+  float data[4];
+  while (client.connected()) {
+    wait_client(client);
+    poll_sensors(data);
+    client.printf("%f %f %f %f", data[0], data[1], data[2], data[3]);
+  }
+
+  client.stop();
+  Serial.println("Client disconnected");
+}
+
+void poll_sensors(float data[4]) {
+  data[0] = bme280.readTemperature();
+  data[1] = bme280.readHumidity();
+  data[2] = bme280.readPressure();
 
   byte response[9];
   if (!touch_mhz19b(response, measureCO2))
-    co2_ppm = response[2] * 256 + response[3];
+    data[3] = response[2] * 256 + response[3];
   else
-    co2_ppm = NAN;
+    data[3] = NAN;
+}
 
-  Serial.println(String(temperature) + ' ' + String(humidity) + ' ' +
-                 String(pressure) + ' ' + String(co2_ppm));
-
-  delay(PERIOD * 1000);
+void wait_client(WiFiClient client) {
+  while (!client.available());
+  while (client.available()) client.read();
 }
 
 void panic_blink() {
