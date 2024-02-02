@@ -41,13 +41,15 @@ void setup() {
   }
 
   WiFi.begin(WIFI_SSID, WIFI_PSWD);
-  Serial.println("Connecting to " WIFI_SSID);
+  Serial.print("Connecting to " WIFI_SSID " with MAC ");
+  Serial.println(WiFi.macAddress());
   for (int i = 0; WiFi.status() != WL_CONNECTED; ++i) {
     Serial.print('.');
     delay(1000);
   }
-  Serial.print("\nIP address: ");
-  Serial.println(WiFi.localIP());
+  Serial.print("\nIP Address ");
+  Serial.print(WiFi.localIP());
+  Serial.println(":80");
 
   server.begin();
 }
@@ -63,9 +65,11 @@ void loop() {
 
   float data[4];
   while (client.connected()) {
-    wait_client(client);
-    poll_sensors(data);
-    client.printf("%f %f %f %f", data[0], data[1], data[2], data[3]);
+    if (client.available()) {
+      poll_sensors(data);
+      client.printf("%f %f %f %f\n", data[0], data[1], data[2], data[3]);
+      while(client.available()) client.read();
+    }
   }
 
   client.stop();
@@ -84,10 +88,6 @@ void poll_sensors(float data[4]) {
     data[3] = NAN;
 }
 
-void wait_client(WiFiClient client) {
-  while (!client.available());
-  while (client.available()) client.read();
-}
 
 void panic_blink() {
   pinMode(LED_BUILTIN, OUTPUT);
